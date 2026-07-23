@@ -220,6 +220,36 @@
     </div>
   </div>
 
+  <!-- DEDICATED FULL-SCREEN SCREENSHOT GALLERY LIGHTBOX MODAL -->
+  <div id="galleryModal" class="auth-overlay hidden" onclick="if(event.target===this) closeGalleryModal()">
+    <div class="auth-card glass-panel" style="max-width: 900px; width: 92%; text-align: left; padding: 24px; position: relative;">
+      <div class="flex-between" style="margin-bottom: 14px; border-bottom: 1px solid var(--bg-card-border); padding-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.5rem;">🖼️</span>
+          <div>
+            <h3 id="galleryModalTitle" style="font-size: 1.1rem; font-weight: 700; word-break: break-all;">Screenshot Frame Gallery</h3>
+            <span id="galleryModalSub" class="section-desc">Frame 1 of 15</span>
+          </div>
+        </div>
+        <button class="icon-btn" onclick="closeGalleryModal()" title="Close">✕</button>
+      </div>
+
+      <!-- Main Stage Preview -->
+      <div class="gallery-stage-container">
+        <button class="gallery-nav-btn prev" onclick="prevGalleryImage()" title="Previous Frame (Left Arrow)">❮</button>
+        <div class="gallery-main-stage">
+          <img id="galleryMainImage" src="" alt="Screenshot Frame Preview" />
+        </div>
+        <button class="gallery-nav-btn next" onclick="nextGalleryImage()" title="Next Frame (Right Arrow)">❯</button>
+      </div>
+
+      <!-- Thumbnail Strip Below -->
+      <div id="galleryThumbStrip" class="gallery-thumb-strip">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </div>
+
   <!-- TOAST NOTIFICATION SYSTEM -->
   <div id="toastContainer" class="toast-container"></div>
 

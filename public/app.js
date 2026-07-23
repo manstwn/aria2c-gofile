@@ -489,6 +489,10 @@ function renderLedger() {
       ? `<div class="original-name-row" title="Original Download Filename">📁 Original: ${escapeHtml(originalName)}</div>`
       : `<div class="original-name-row" title="Downloaded Filename">📁 Original: ${escapeHtml(originalName)}</div>`;
 
+    const galleryBtn = (file.thumbnails && file.thumbnails.length > 0)
+      ? `<button class="btn-table-action info" onclick="openGalleryModal('${file.id}')" title="View 15-Frame Screenshot Gallery (${file.thumbnails.length} frames)">🖼️ Gallery</button>`
+      : '';
+
     return `
       <tr>
         <td class="filename-cell">
@@ -511,6 +515,7 @@ function renderLedger() {
         <td><small class="utc-date-text" title="UTC: ${escapeHtml(createdAtUTC)}">${escapeHtml(createdAtRel)}</small></td>
         <td class="text-right">
           <div class="action-buttons">
+            ${galleryBtn}
             <button class="btn-table-action primary" onclick="showFileMetadata('${file.id}')" title="View Full File Metadata">🔍 Meta</button>
             <button class="btn-table-action" onclick="copyToClipboard('${escapeHtml(file.download_url)}')" title="Copy GoFile Link">📋 Copy</button>
             <button class="btn-table-action success" onclick="triggerSingleTouch('${file.id}')" title="Ping GoFile link now">⚡ Touch</button>
@@ -726,3 +731,75 @@ function escapeHtml(str) {
     return map[match];
   });
 }
+
+/* ==========================================================================
+   GALLERY LIGHTBOX MODAL HANDLERS
+   ========================================================================== */
+
+let activeGalleryImages = [];
+let currentGalleryIndex = 0;
+
+function openGalleryModal(id) {
+  const file = ledgerFiles.find(f => f.id === id);
+  if (!file || !file.thumbnails || file.thumbnails.length === 0) {
+    showToast('No screenshot thumbnails available for this file', 'info');
+    return;
+  }
+
+  activeGalleryImages = file.thumbnails;
+  currentGalleryIndex = 0;
+
+  const displayName = file.custom_name || file.filename;
+  document.getElementById('galleryModalTitle').textContent = `${displayName} — Screenshot Gallery`;
+
+  renderGalleryState();
+  document.getElementById('galleryModal').classList.remove('hidden');
+}
+
+function renderGalleryState() {
+  if (!activeGalleryImages || activeGalleryImages.length === 0) return;
+
+  const total = activeGalleryImages.length;
+  document.getElementById('galleryModalSub').textContent = `Frame ${currentGalleryIndex + 1} of ${total}`;
+  document.getElementById('galleryMainImage').src = activeGalleryImages[currentGalleryIndex];
+
+  const strip = document.getElementById('galleryThumbStrip');
+  strip.innerHTML = activeGalleryImages.map((tUrl, idx) => `
+    <div class="gallery-thumb-item ${idx === currentGalleryIndex ? 'active' : ''}" onclick="setGalleryIndex(${idx})">
+      <img src="${tUrl}" alt="Thumb ${idx + 1}" />
+    </div>
+  `).join('');
+}
+
+function setGalleryIndex(index) {
+  if (index >= 0 && index < activeGalleryImages.length) {
+    currentGalleryIndex = index;
+    renderGalleryState();
+  }
+}
+
+function prevGalleryImage() {
+  if (activeGalleryImages.length === 0) return;
+  currentGalleryIndex = (currentGalleryIndex - 1 + activeGalleryImages.length) % activeGalleryImages.length;
+  renderGalleryState();
+}
+
+function nextGalleryImage() {
+  if (activeGalleryImages.length === 0) return;
+  currentGalleryIndex = (currentGalleryIndex + 1) % activeGalleryImages.length;
+  renderGalleryState();
+}
+
+function closeGalleryModal() {
+  document.getElementById('galleryModal').classList.add('hidden');
+}
+
+// Keyboard arrow key navigation support for Gallery Modal
+document.addEventListener('keydown', (e) => {
+  const modal = document.getElementById('galleryModal');
+  if (modal && !modal.classList.contains('hidden')) {
+    if (e.key === 'ArrowLeft') prevGalleryImage();
+    if (e.key === 'ArrowRight') nextGalleryImage();
+    if (e.key === 'Escape') closeGalleryModal();
+  }
+});
