@@ -93,7 +93,12 @@ async function touchFileRecord(file) {
       directLink = file.download_url;
     }
 
-    logger.debug(`[TouchManager Debug] Target Direct Download Link: ${directLink}`);
+    logger.debug(`[TouchManager Debug] ─────────────────────────────────────────`);
+    logger.debug(`[TouchManager Debug] 📄 File:           ${file.filename}`);
+    logger.debug(`[TouchManager Debug] 🔗 GoFile Page:    ${file.download_url}`);
+    logger.debug(`[TouchManager Debug] 🎯 Actual 1KB URL: ${directLink}`);
+    logger.debug(`[TouchManager Debug] 🔑 Auth Token:     ${token ? `${token.substring(0, 8)}...` : 'none (public)'}`);
+    logger.debug(`[TouchManager Debug] 📦 Range Header:   bytes=0-1024`);
 
     // Step 3: Trigger 1 KB Micro-Download with Range header
     const downloadHeaders = {
@@ -107,6 +112,11 @@ async function touchFileRecord(file) {
       responseType: 'stream',
       validateStatus: status => status < 500
     });
+
+    logger.debug(`[TouchManager Debug] ✉️  HTTP Response:   ${response.status} ${response.statusText || ''}`);
+    logger.debug(`[TouchManager Debug] 📏 Content-Range:  ${response.headers?.['content-range'] || 'N/A'}`);
+    logger.debug(`[TouchManager Debug] 🗂️  Content-Type:   ${response.headers?.['content-type'] || 'N/A'}`);
+    logger.debug(`[TouchManager Debug] ─────────────────────────────────────────`);
 
     const isOk = response.status === 200 || response.status === 206;
     const isNotFound = response.status === 404;
