@@ -26,6 +26,36 @@ function isFFmpegAvailable() {
 }
 
 /**
+ * Extract exact video duration in seconds via ffprobe or metadata fallback
+ */
+function getVideoDuration(filePath, meta = {}) {
+  // 1. Primary: Use ffprobe for 100% exact video duration from file container
+  try {
+    const output = execSync(`ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 "${filePath}"`, { timeout: 5000 }).toString().trim();
+    const parsedSecs = parseFloat(output);
+    if (!isNaN(parsedSecs) && parsedSecs > 0) {
+      return Math.round(parsedSecs);
+    }
+  } catch (e) {}
+
+  // 2. Secondary: Parse HH:MM:SS or MM:SS from metadata
+  if (meta.duration_formatted) {
+    const parts = meta.duration_formatted.split(':').map(p => parseInt(p, 10));
+    if (parts.length === 3 && !parts.some(isNaN)) {
+      return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    } else if (parts.length === 2 && !parts.some(isNaN)) {
+      return parts[0] * 60 + parts[1];
+    }
+  }
+
+  if (meta.duration_seconds && meta.duration_seconds > 0) {
+    return meta.duration_seconds;
+  }
+
+  return 300; // Fallback to 5 minutes (300 seconds) if unknown
+}
+
+/**
  * Helper to run ffmpeg seeking frame extraction asynchronously
  */
 function extractVideoFrame(filePath, timestampSeconds, outputPath) {
@@ -84,7 +114,7 @@ async function generateThumbnails(filePath, fileId, meta = {}) {
   }
 
   // =========================================================================
-  // VIDEO 15-FRAME SCREENSHOT GENERATION
+  // VIDEO 15-FRAME SCREENSHOT GENERATION ACROSS REAL DURATION
   // =========================================================================
   if (category === 'video') {
     if (!isFFmpegAvailable()) {
@@ -92,19 +122,12 @@ async function generateThumbnails(filePath, fileId, meta = {}) {
       return [];
     }
 
-    let duration = 60; // Default fallback 60 seconds
-    if (meta.width && meta.height && meta.duration_formatted) {
-      const parts = meta.duration_formatted.split(':');
-      if (parts.length === 2) {
-        duration = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
-      }
-    }
-
-    if (duration <= 0) duration = 60;
-
+    const duration = getVideoDuration(filePath, meta);
     const count = 15;
     const interval = duration / (count + 1);
-    console.log(`[Thumbnails] Generating ${count} video frame screenshots for ${path.basename(filePath)} (Duration: ${duration}s, Interval: ${interval.toFixed(1)}s)...`);
+
+    const formattedMins = (duration / 60).toFixed(1);
+    console.log(`[Thumbnails] Generating ${count} video frame screenshots for ${path.basename(filePath)} (Total Duration: ${duration}s / ${formattedMins} mins, Interval: Every ${interval.toFixed(1)}s)...`);
 
     for (let i = 1; i <= count; i++) {
       const targetTime = parseFloat((interval * i).toFixed(1));
