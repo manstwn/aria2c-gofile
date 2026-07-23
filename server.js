@@ -156,7 +156,9 @@ app.get('/api/files', auth.requireAuth, (req, res) => {
 app.post('/api/files/:id/touch', auth.requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await touchManager.touchSingleFile(id);
+    const file = db.getFileById(id);
+    if (!file) return res.status(404).json({ error: 'File not found' });
+    const result = await touchManager.touchFileRecord(file);
     res.json({ success: true, result });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -165,9 +167,8 @@ app.post('/api/files/:id/touch', auth.requireAuth, async (req, res) => {
 
 app.post('/api/files/touch-all', auth.requireAuth, async (req, res) => {
   try {
-    // Force touch on all LIVE files on demand
-    const results = await touchManager.runTouchRoutine(true);
-    res.json({ success: true, count: results.length, results });
+    const results = await touchManager.touchAllFiles();
+    res.json({ success: true, results });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
