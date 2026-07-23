@@ -9,12 +9,59 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// All known GoFile CDN servers to probe when cdn_server is not stored
+const KNOWN_GOFILE_SERVERS = [
+  'store1', 'store2', 'store3', 'store4', 'store5', 'store6',
+  'store-eu-par-1', 'store-eu-par-2', 'store-eu-par-3', 'store-eu-par-4',
+  'store-na-us-1', 'store-na-us-2',
+  'store-as-sg-1'
+];
+
+/**
+ * Probe all known GoFile CDN servers to find which one hosts the file.
+ * Saves result to DB so this only runs once per file.
+ * @returns {string|null} Found server name or null
+ */
+async function probeGoFileServer(file) {
+  const fileId = file.gofile_id;
+  const filename = file.original_filename || file.filename;
+
+  if (!fileId || !filename) return null;
+
+  logger.debug(`[TouchManager Debug] 🔍 Probing ${KNOWN_GOFILE_SERVERS.length} GoFile servers to find the right one...`);
+
+  for (const server of KNOWN_GOFILE_SERVERS) {
+    const probeUrl = `https://${server}.gofile.io/download/web/${fileId}/${encodeURIComponent(filename)}`;
+    try {
+      const res = await axios.head(probeUrl, {
+        headers: {
+          'User-Agent': USER_AGENT,
+          'Referer': 'https://gofile.io/',
+          'Origin': 'https://gofile.io'
+        },
+        timeout: 4000,
+        validateStatus: s => s < 500
+      });
+
+      if (res.status === 200 || res.status === 206 || res.status === 301 || res.status === 302) {
+        logger.debug(`[TouchManager Debug] ✅ Found server: ${server} (HTTP ${res.status})`);
+        // Save to DB so we don't probe again
+        db.updateFile(file.id, { cdn_server: server });
+        return server;
+      }
+      logger.debug(`[TouchManager Debug] ❌ ${server} → ${res.status}`);
+    } catch (e) {
+      logger.debug(`[TouchManager Debug] ❌ ${server} → ${e.message}`);
+    }
+  }
+
+  logger.debug(`[TouchManager Debug] ⚠️  No GoFile server found hosting this file.`);
+  return null;
+}
+
 /**
  * Build the direct GoFile CDN download URL from stored record data.
  * Format: https://{cdn_server}.gofile.io/download/web/{gofile_id}/{filename}
- *
- * This is what the browser resolves to after visiting the GoFile page.
- * No API calls or tokens required — pure CDN direct link.
  */
 function buildDirectCdnUrl(file) {
   const server = file.cdn_server;
@@ -41,25 +88,33 @@ async function touchFileRecord(file) {
   console.log(`[TouchManager] Pinging & 1KB micro-downloading ${file.filename} (${file.download_url})...`);
 
   // Build direct CDN URL from stored server + gofile_id + filename
-  const directCdnUrl = buildDirectCdnUrl(file);
+  let directCdnUrl = buildDirectCdnUrl(file);
 
   logger.debug(`[TouchManager Debug] ─────────────────────────────────────────`);
   logger.debug(`[TouchManager Debug] 📄 File:           ${file.filename}`);
   logger.debug(`[TouchManager Debug] 🔗 GoFile Page:    ${file.download_url}`);
-  logger.debug(`[TouchManager Debug] 🖥️  CDN Server:     ${file.cdn_server || 'unknown (not stored)'}`);
+  logger.debug(`[TouchManager Debug] 🖥️  CDN Server:     ${file.cdn_server || 'unknown — will probe'}`);
   logger.debug(`[TouchManager Debug] 🆔 GoFile ID:      ${file.gofile_id || 'unknown'}`);
 
-  if (!directCdnUrl) {
-    // Fallback: no cdn_server stored (old records uploaded before this fix)
-    logger.debug(`[TouchManager Debug] ⚠️  No cdn_server stored for this file. Falling back to GoFile page URL.`);
-    logger.debug(`[TouchManager Debug] ℹ️  Re-upload the file to enable direct CDN touching.`);
-    logger.debug(`[TouchManager Debug] 🎯 Fallback URL:   ${file.download_url}`);
-    logger.debug(`[TouchManager Debug] ─────────────────────────────────────────`);
-  } else {
+  // No cdn_server stored — auto-probe all known servers to find the right one
+  if (!directCdnUrl && file.gofile_id) {
+    logger.debug(`[TouchManager Debug] ⚠️  No cdn_server stored. Auto-probing servers...`);
+    const foundServer = await probeGoFileServer(file);
+    if (foundServer) {
+      // Rebuild with newly found server
+      file = { ...file, cdn_server: foundServer };
+      directCdnUrl = buildDirectCdnUrl(file);
+      logger.debug(`[TouchManager Debug] 🖥️  Server resolved: ${foundServer}`);
+    } else {
+      logger.debug(`[TouchManager Debug] 🎯 Fallback URL:   ${file.download_url}`);
+    }
+  }
+
+  if (directCdnUrl) {
     logger.debug(`[TouchManager Debug] 🎯 Direct CDN URL: ${directCdnUrl}`);
     logger.debug(`[TouchManager Debug] 📦 Range Header:  bytes=0-1024`);
-    logger.debug(`[TouchManager Debug] ─────────────────────────────────────────`);
   }
+  logger.debug(`[TouchManager Debug] ─────────────────────────────────────────`);
 
   const targetUrl = directCdnUrl || file.download_url;
 
