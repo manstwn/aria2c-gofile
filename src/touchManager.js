@@ -157,10 +157,23 @@ async function touchFileRecord(file) {
     }
 
     // Step 3: Resolve actual CDN direct download link
+    // IMPORTANT: Must use the SHORT CODE from the download URL (e.g. "U7h3RA"),
+    // NOT the file UUID stored as gofile_id. They are different!
     logger.debug(`[TouchManager Debug] Step 3: Resolving CDN direct link...`);
     let directLink = null;
-    if (wt && file.gofile_id) {
-      directLink = await resolveDirectLink(file.gofile_id, wt, file.download_url);
+
+    // Extract the content short code from download URL: https://gofile.io/d/U7h3RA → U7h3RA
+    let contentShortCode = null;
+    if (file.download_url) {
+      const match = file.download_url.match(/gofile\.io\/d\/([a-zA-Z0-9]+)/);
+      if (match && match[1]) {
+        contentShortCode = match[1];
+        logger.debug(`[TouchManager Debug] Extracted content short code: ${contentShortCode} (from ${file.download_url})`);
+      }
+    }
+
+    if (wt && contentShortCode) {
+      directLink = await resolveDirectLink(contentShortCode, wt, file.download_url);
     }
 
     // Fallback to GoFile page link
