@@ -120,6 +120,7 @@ module.exports = {
   DATA_DIR,
   DOWNLOADS_DIR,
   FILES_JSON_PATH,
+  generateId,
   getAllFiles,
   getFileById,
   addFile,
