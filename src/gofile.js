@@ -192,6 +192,7 @@ async function uploadToGoFile(filePath, overrideFilename, onProgress = null, sou
       original_filename: originalFilename,
       source_url: sourceUrl || '',
       gofile_id: fileId,
+      cdn_server: server,
       download_url: downloadPage,
       admin_code: adminCode,
       created_at: now,

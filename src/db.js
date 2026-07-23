@@ -79,6 +79,7 @@ function addFile(record) {
     gofile_id: record.gofile_id || '',
     download_url: record.download_url || '',
     admin_code: record.admin_code || '',
+    cdn_server: record.cdn_server || '',
     created_at: record.created_at || now,
     last_touched: record.last_touched || now,
     status: record.status || 'LIVE',
