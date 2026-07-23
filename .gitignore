@@ -1,0 +1,21 @@
+# Dependency & Build Artifacts
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment & Credentials
+.env
+.env.local
+.env.production
+
+# Local Data Storage & Downloads
+data/
+downloads/
+temp/
+
+# OS/Editor Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GoTouch Manager - Aria2 & GoFile Automation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="dark-theme">
+
+  <!-- AUTH PIN OVERLAY -->
+  <div id="authOverlay" class="auth-overlay">
+    <div class="auth-card glass-panel">
+      <div class="auth-header">
+        <div class="brand-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+        </div>
+        <h2>GoTouch Manager</h2>
+        <p>Enter Admin PIN to access dashboard</p>
+      </div>
+
+      <form id="pinForm" onsubmit="handlePinSubmit(event)">
+        <div class="pin-display">
+          <div class="pin-dots">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+          </div>
+          <input type="password" id="pinInput" maxlength="12" autofocus autocomplete="off" placeholder="Enter PIN">
+        </div>
+
+        <div id="authError" class="auth-error hidden">Invalid PIN code. Please try again.</div>
+
+        <div class="keypad">
+          <button type="button" onclick="appendPin('1')">1</button>
+          <button type="button" onclick="appendPin('2')">2</button>
+          <button type="button" onclick="appendPin('3')">3</button>
+          <button type="button" onclick="appendPin('4')">4</button>
+          <button type="button" onclick="appendPin('5')">5</button>
+          <button type="button" onclick="appendPin('6')">6</button>
+          <button type="button" onclick="appendPin('7')">7</button>
+          <button type="button" onclick="appendPin('8')">8</button>
+          <button type="button" onclick="appendPin('9')">9</button>
+          <button type="button" class="btn-secondary" onclick="clearPin()">C</button>
+          <button type="button" onclick="appendPin('0')">0</button>
+          <button type="submit" class="btn-primary">↵</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MAIN DASHBOARD CONTENT -->
+  <div id="mainDashboard" class="app-container hidden">
+
+    <!-- NAVIGATION HEADER -->
+    <header class="app-header glass-header">
+      <div class="header-brand">
+        <div class="logo-box">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+        </div>
+        <div>
+          <h1>GoTouch Manager</h1>
+          <span class="subtitle">Multi-Connection Aria2c & GoFile Touch Daemon</span>
+        </div>
+      </div>
+
+      <div class="header-status">
+        <div class="status-indicator-pill" id="aria2StatusBadge">
+          <span class="status-dot offline"></span>
+          <span id="aria2StatusText">Aria2 checking...</span>
+        </div>
+        <div class="badge-pill">
+          <span class="badge-label">LIVE Files</span>
+          <span class="badge-val" id="statLiveCount">0</span>
+        </div>
+        <button class="icon-btn" onclick="handleLogout()" title="Logout">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <main class="dashboard-body">
+
+      <!-- SECTION 1: DOWNLOAD SUBMISSION & ACTIVE TASKS -->
+      <section class="card glass-card">
+        <div class="card-header">
+          <div class="title-with-badge">
+            <h2>Remote Download Task</h2>
+            <span class="tech-tag">⚡ 16 Connections Enforced (-x16 -s16)</span>
+          </div>
+        </div>
+
+        <form id="downloadForm" onsubmit="handleDownloadSubmit(event)" class="submission-form">
+          <div class="input-group">
+            <input type="url" id="downloadUrlInput" placeholder="Paste HTTP, FTP, or Direct Download URL..." required>
+            <input type="text" id="customFilenameInput" placeholder="Custom filename (optional, e.g. video.mp4)">
+            <button type="submit" class="btn-submit" id="btnSubmitDownload">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Start Download
+            </button>
+          </div>
+        </form>
+
+        <!-- Active Downloads Progress List -->
+        <div id="activeDownloadsContainer">
+          <div id="activeDownloadsList" class="downloads-list"></div>
+          <div class="empty-state" id="downloadsEmptyState">
+            <span>No active downloads running in Aria2 queue</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION 2: FILE MANAGEMENT LEDGER -->
+      <section class="card glass-card">
+        <div class="card-header flex-between">
+          <div>
+            <h2>File Management Ledger</h2>
+            <p class="section-desc">Stored records in local flat-file storage (`data/files.json`)</p>
+          </div>
+
+          <div class="header-actions">
+            <button class="btn-action pulse-btn" onclick="triggerTouchAll()" id="btnTouchAll">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 4v6h-6"></path>
+                <path d="M1 20v-6h6"></path>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+              Touch All LIVE Files
+            </button>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <div class="search-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="searchInput" oninput="renderLedger()" placeholder="Search by filename or ID...">
+          </div>
+
+          <div class="status-filter-pills">
+            <button class="filter-pill active" onclick="setFilter('ALL', this)">All (<span id="countAll">0</span>)</button>
+            <button class="filter-pill" onclick="setFilter('LIVE', this)">LIVE (<span id="countLive">0</span>)</button>
+            <button class="filter-pill" onclick="setFilter('DEAD', this)">DEAD (<span id="countDead">0</span>)</button>
+          </div>
+        </div>
+
+        <!-- Ledger Table -->
+        <div class="table-responsive">
+          <table class="ledger-table">
+            <thead>
+              <tr>
+                <th>Filename</th>
+                <th>GoFile Download Link</th>
+                <th>Status</th>
+                <th>Last Touched</th>
+                <th>Created</th>
+                <th class="text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="ledgerTableBody">
+              <!-- Rendered via Javascript -->
+            </tbody>
+          </table>
+          <div id="ledgerEmptyState" class="empty-state hidden">
+            <span>No records found in database.</span>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+  <!-- METADATA INSPECTOR MODAL -->
+  <div id="metadataModal" class="auth-overlay hidden" onclick="if(event.target===this) closeMetadataModal()">
+    <div class="auth-card glass-panel" style="max-width: 760px; text-align: left; padding: 28px;">
+      <div class="flex-between" style="margin-bottom: 16px; border-bottom: 1px solid var(--bg-card-border); padding-bottom: 12px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span id="metaCategoryIcon" style="font-size: 1.5rem;">📄</span>
+          <div>
+            <h3 id="metaModalTitle" style="font-size: 1.1rem; font-weight: 700; word-break: break-all;">File Metadata</h3>
+            <span id="metaModalSub" class="section-desc">Full metadata inspection</span>
+          </div>
+        </div>
+        <button class="icon-btn" onclick="closeMetadataModal()" title="Close">✕</button>
+      </div>
+
+      <div id="metaModalBody" class="meta-grid">
+        <!-- Rendered dynamically via Javascript -->
+      </div>
+
+      <div class="flex-between" style="margin-top: 20px; border-top: 1px solid var(--bg-card-border); padding-top: 16px;">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button class="btn-action" id="metaBtnTouch">⚡ Touch Now</button>
+          <button class="btn-table-action" id="metaBtnCopyGoFile">📋 Copy GoFile Link</button>
+        </div>
+        <button class="btn-table-action" onclick="closeMetadataModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION SYSTEM -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
