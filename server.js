@@ -19,9 +19,6 @@ app.use(cookieParser());
 // Serve static UI assets from public folder
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Serve generated thumbnails from data/image directory
-app.use('/data/image', express.static(path.join(__dirname, 'data/image')));
-
 /* ==========================================================================
    PUBLIC AUTH ROUTES
    ========================================================================== */
@@ -98,6 +95,9 @@ app.get('/api/stream', (req, res) => {
 /* ==========================================================================
    PROTECTED API ROUTES (Require PIN Authentication)
    ========================================================================== */
+
+// Protected static route for generated image thumbnails (requires valid PIN auth)
+app.use('/data/image', auth.requireAuth, express.static(path.join(__dirname, 'data/image')));
 
 // Download Orchestration Routes
 app.get('/api/downloads', auth.requireAuth, async (req, res) => {
