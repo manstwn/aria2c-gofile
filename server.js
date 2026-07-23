@@ -19,6 +19,9 @@ app.use(cookieParser());
 // Serve static UI assets from public folder
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Serve generated thumbnails from data/image directory
+app.use('/data/image', express.static(path.join(__dirname, 'data/image')));
+
 /* ==========================================================================
    PUBLIC AUTH ROUTES
    ========================================================================== */

@@ -82,7 +82,8 @@ function addFile(record) {
     created_at: record.created_at || now,
     last_touched: record.last_touched || now,
     status: record.status || 'LIVE',
-    metadata: record.metadata || null
+    metadata: record.metadata || null,
+    thumbnails: record.thumbnails || []
   };
 
   files.unshift(newRecord);

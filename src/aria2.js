@@ -70,6 +70,7 @@ function ensureAria2Daemon() {
     `--rpc-listen-port=${port}`,
     '--rpc-listen-all=false',
     `--dir=${downloadsDir}`,
+    '--max-concurrent-downloads=1',
     '--max-connection-per-server=16',
     '--split=16',
     '--quiet=true'
@@ -169,6 +170,7 @@ async function addDownload(url, customFilename = '') {
 
   const options = {
     dir: path.resolve(db.DOWNLOADS_DIR),
+    'max-concurrent-downloads': '1',
     'max-connection-per-server': '16',
     split: '16'
   };

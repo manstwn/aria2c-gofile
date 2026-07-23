@@ -605,6 +605,20 @@ function showFileMetadata(id) {
       <span class="meta-label">Last Touched Date (UTC)</span>
       <div class="meta-value mono" style="font-size:0.8rem;">${formatUTC(file.last_touched)}</div>
     </div>
+
+    ${(file.thumbnails && file.thumbnails.length > 0) ? `
+    <div class="meta-item full-width" style="margin-top: 6px;">
+      <span class="meta-label">🖼️ Screenshot Frame Gallery (${file.thumbnails.length} frames)</span>
+      <div class="thumb-gallery-grid">
+        ${file.thumbnails.map((tUrl, idx) => `
+          <a href="${tUrl}" target="_blank" class="thumb-card" title="Frame ${idx + 1}">
+            <img src="${tUrl}" alt="Frame ${idx + 1}" loading="lazy" />
+            <span class="thumb-badge">#${idx + 1}</span>
+          </a>
+        `).join('')}
+      </div>
+    </div>
+    ` : ''}
   `;
 
   document.getElementById('metaBtnTouch').onclick = () => { triggerSingleTouch(file.id); };

@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const db = require('./db');
 const metadata = require('./metadata');
+const thumbnailsModule = require('./thumbnails');
 require('dotenv').config();
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -177,8 +178,12 @@ async function uploadToGoFile(filePath, overrideFilename, onProgress = null, sou
       } catch (e) {}
     }
 
+    const recordId = db.generateId();
+    const thumbs = await thumbnailsModule.generateThumbnails(filePath, recordId, fileMeta);
+
     const now = new Date().toISOString();
     const record = db.addFile({
+      id: recordId,
       filename: filename,
       custom_name: (filename && filename !== originalFilename) ? filename : '',
       original_filename: originalFilename,
@@ -189,7 +194,8 @@ async function uploadToGoFile(filePath, overrideFilename, onProgress = null, sou
       created_at: now,
       last_touched: now,
       status: 'LIVE',
-      metadata: fileMeta
+      metadata: fileMeta,
+      thumbnails: thumbs
     });
 
     console.log(`[GoFile] ✅ Upload successful! Filename: ${filename} (Original: ${originalFilename}) | Download URL: ${downloadPage}`);
