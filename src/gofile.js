@@ -5,6 +5,7 @@ const path = require('path');
 const db = require('./db');
 const metadata = require('./metadata');
 const thumbnailsModule = require('./thumbnails');
+const logger = require('./logger');
 require('dotenv').config();
 
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
@@ -27,6 +28,8 @@ async function getUploadServer() {
       headers,
       timeout: 6000
     });
+
+    logger.debug('[GoFile Debug] Servers API Response:', JSON.stringify(response.data || {}));
 
     if (response.data && response.data.status === 'ok' && response.data.data) {
       const data = response.data.data;

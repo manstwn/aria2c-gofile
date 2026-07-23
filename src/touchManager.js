@@ -13,6 +13,8 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+const logger = require('./logger');
+
 /**
  * Ping a single file's download page to keep it active
  * @param {object} file File record object from database
@@ -39,12 +41,16 @@ async function touchFileRecord(file) {
     targetUrl = `https://api.gofile.io/contents/${file.gofile_id}`;
   }
 
+  logger.debug(`[TouchManager Debug] Target URL: ${targetUrl} | Auth Token Present: ${!!token}`);
+
   try {
     const response = await axios.get(targetUrl, {
       headers,
       timeout: 6000,
       validateStatus: status => status < 500
     });
+
+    logger.debug(`[TouchManager Debug] Response Status: ${response.status} | Data:`, JSON.stringify(response.data || {}));
 
     const isOk = response.status === 200 && (response.data?.status === 'ok' || !response.data?.status);
     const isNotFound = response.status === 404 || response.data?.status === 'error-notFound';
