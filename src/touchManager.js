@@ -75,10 +75,10 @@ async function getGoFileGuestToken(refererUrl) {
  * Step 3: Resolve actual CDN direct download link from GoFile contents API
  *   - Mimics exactly what GoFile SPA JS does after getting the wt token
  */
-async function resolveDirectLink(gofileId, wt, refererUrl) {
-  if (!gofileId || !wt) return null;
+async function resolveDirectLink(contentShortCode, wt, refererUrl) {
+  if (!contentShortCode || !wt) return null;
 
-  const contentsUrl = `https://api.gofile.io/contents/${gofileId}?wt=${wt}`;
+  const contentsUrl = `https://api.gofile.io/contents/${contentShortCode}?wt=${wt}`;
   logger.debug(`[TouchManager Debug] Resolving direct CDN link via: ${contentsUrl}`);
 
   try {
@@ -87,7 +87,6 @@ async function resolveDirectLink(gofileId, wt, refererUrl) {
         'User-Agent': USER_AGENT,
         'Accept': 'application/json, text/plain, */*',
         'Accept-Language': 'en-US,en;q=0.9',
-        'Authorization': `Bearer ${wt}`,
         'Origin': 'https://gofile.io',
         'Referer': refererUrl || 'https://gofile.io/',
         'Sec-Fetch-Dest': 'empty',
