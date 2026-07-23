@@ -10,30 +10,128 @@ function sleep(ms) {
 }
 
 /**
- * Fetch a fresh GoFile guest account token 'wt'
+ * Step 1: Mimic browser visiting GoFile page to establish session
+ *   - Sends GET to https://gofile.io/d/{id} with full browser headers
+ *   - Returns any set-cookie values from GoFile CDN
  */
-async function getGoFileGuestToken() {
+async function visitGoFilePage(downloadUrl) {
   try {
-    const response = await axios.post('https://api.gofile.io/accounts', {}, {
+    const res = await axios.get(downloadUrl, {
       headers: {
         'User-Agent': USER_AGENT,
-        'Accept': 'application/json',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Upgrade-Insecure-Requests': '1'
+      },
+      timeout: 6000,
+      maxRedirects: 5,
+      validateStatus: s => s < 500
+    });
+    // Return cookies if any
+    return res.headers['set-cookie'] || [];
+  } catch (err) {
+    logger.debug(`[TouchManager Debug] Page visit notice: ${err.message}`);
+    return [];
+  }
+}
+
+/**
+ * Step 2: Mimic browser SPA call — POST /accounts to get a fresh guest wt token
+ *   - Must include Origin and Referer exactly like GoFile's own frontend JS does
+ */
+async function getGoFileGuestToken(refererUrl) {
+  try {
+    const res = await axios.post('https://api.gofile.io/accounts', {}, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Content-Type': 'application/json',
         'Origin': 'https://gofile.io',
-        'Referer': 'https://gofile.io/'
+        'Referer': refererUrl || 'https://gofile.io/',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-site'
       },
       timeout: 5000
     });
-    if (response.data && response.data.status === 'ok' && response.data.data?.token) {
-      return response.data.data.token;
+    if (res.data?.status === 'ok' && res.data.data?.token) {
+      logger.debug(`[TouchManager Debug] ✅ Guest wt token obtained: ${res.data.data.token.substring(0, 8)}...`);
+      return res.data.data.token;
     }
+    logger.debug(`[TouchManager Debug] Guest token response: ${JSON.stringify(res.data)}`);
   } catch (err) {
-    logger.debug(`[TouchManager Debug] Failed to fetch guest token: ${err.message}`);
+    logger.debug(`[TouchManager Debug] Guest token error: ${err.message}`);
   }
   return null;
 }
 
 /**
- * Perform 1 KB Micro-Download & Abort on a single GoFile record
+ * Step 3: Resolve actual CDN direct download link from GoFile contents API
+ *   - Mimics exactly what GoFile SPA JS does after getting the wt token
+ */
+async function resolveDirectLink(gofileId, wt, refererUrl) {
+  if (!gofileId || !wt) return null;
+
+  const contentsUrl = `https://api.gofile.io/contents/${gofileId}?wt=${wt}`;
+  logger.debug(`[TouchManager Debug] Resolving direct CDN link via: ${contentsUrl}`);
+
+  try {
+    const res = await axios.get(contentsUrl, {
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Authorization': `Bearer ${wt}`,
+        'Origin': 'https://gofile.io',
+        'Referer': refererUrl || 'https://gofile.io/',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-site'
+      },
+      timeout: 8000
+    });
+
+    logger.debug(`[TouchManager Debug] Contents API response: ${JSON.stringify(res.data).substring(0, 300)}`);
+
+    if (res.data?.status === 'ok' && res.data.data) {
+      const data = res.data.data;
+
+      // Folder with children (most common case)
+      if (data.children) {
+        const childKeys = Object.keys(data.children);
+        for (const key of childKeys) {
+          const child = data.children[key];
+          if (child.link) {
+            logger.debug(`[TouchManager Debug] ✅ Resolved direct link: ${child.link}`);
+            return child.link;
+          }
+          if (child.directLink) {
+            logger.debug(`[TouchManager Debug] ✅ Resolved direct link: ${child.directLink}`);
+            return child.directLink;
+          }
+        }
+      }
+
+      // Direct file (not folder)
+      if (data.link) return data.link;
+      if (data.directLink) return data.directLink;
+    }
+
+    logger.debug(`[TouchManager Debug] Could not resolve direct link from contents. Status: ${res.data?.status}`);
+  } catch (err) {
+    logger.debug(`[TouchManager Debug] Contents API error: ${err.message}`);
+  }
+  return null;
+}
+
+/**
+ * Main touch: Full browser-mimic 1 KB Micro-Download & Abort
  * @param {object} file File record object from database
  */
 async function touchFileRecord(file) {
@@ -44,73 +142,56 @@ async function touchFileRecord(file) {
 
   console.log(`[TouchManager] Pinging & 1KB micro-downloading ${file.filename} (${file.download_url})...`);
 
-  const headers = {
-    'User-Agent': USER_AGENT,
-    'Accept': '*/*',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Referer': file.download_url
-  };
-
   try {
-    // Step 1: Obtain account/guest token
-    let token = (process.env.GOFILE_API_TOKEN || '').trim();
-    if (!token) {
-      token = await getGoFileGuestToken() || '';
+    // Step 1: Visit the GoFile page to establish a browser-like session
+    logger.debug(`[TouchManager Debug] Step 1: Visiting GoFile page...`);
+    const cookies = await visitGoFilePage(file.download_url);
+    logger.debug(`[TouchManager Debug] Page cookies: ${cookies.length > 0 ? cookies.join('; ') : 'none'}`);
+
+    // Step 2: Get fresh guest wt token exactly like GoFile SPA does
+    logger.debug(`[TouchManager Debug] Step 2: Getting guest wt token...`);
+    const wt = await getGoFileGuestToken(file.download_url);
+
+    if (!wt) {
+      console.warn(`[TouchManager] Could not obtain guest wt token for ${file.filename}. Falling back to page visit.`);
     }
 
-    if (token) {
-      headers['Cookie'] = `accountToken=${token}`;
-    }
-
-    // Step 2: Get contents and resolve direct download link
+    // Step 3: Resolve actual CDN direct download link
+    logger.debug(`[TouchManager Debug] Step 3: Resolving CDN direct link...`);
     let directLink = null;
-    if (file.gofile_id) {
-      const contentsUrl = `https://api.gofile.io/contents/${file.gofile_id}?wt=${token}`;
-      logger.debug(`[TouchManager Debug] Fetching contents metadata from: ${contentsUrl}`);
-
-      try {
-        const contentsRes = await axios.get(contentsUrl, {
-          headers,
-          timeout: 6000
-        });
-
-        if (contentsRes.data && contentsRes.data.status === 'ok' && contentsRes.data.data) {
-          const contentsData = contentsRes.data.data;
-          const children = contentsData.children || {};
-          const childKeys = Object.keys(children);
-          if (childKeys.length > 0) {
-            const firstChild = children[childKeys[0]];
-            directLink = firstChild.link || firstChild.downloadPage || null;
-          }
-        }
-      } catch (err) {
-        logger.debug(`[TouchManager Debug] Contents resolution notice: ${err.message}`);
-      }
+    if (wt && file.gofile_id) {
+      directLink = await resolveDirectLink(file.gofile_id, wt, file.download_url);
     }
 
-    // Fallback direct link to download page
+    // Fallback to GoFile page link
     if (!directLink) {
       directLink = file.download_url;
+      logger.debug(`[TouchManager Debug] ⚠️  Falling back to GoFile page URL (no direct CDN link resolved)`);
     }
 
     logger.debug(`[TouchManager Debug] ─────────────────────────────────────────`);
     logger.debug(`[TouchManager Debug] 📄 File:           ${file.filename}`);
     logger.debug(`[TouchManager Debug] 🔗 GoFile Page:    ${file.download_url}`);
     logger.debug(`[TouchManager Debug] 🎯 Actual 1KB URL: ${directLink}`);
-    logger.debug(`[TouchManager Debug] 🔑 Auth Token:     ${token ? `${token.substring(0, 8)}...` : 'none (public)'}`);
+    logger.debug(`[TouchManager Debug] 🔑 wt Token:       ${wt ? wt.substring(0, 8) + '...' : 'none'}`);
     logger.debug(`[TouchManager Debug] 📦 Range Header:   bytes=0-1024`);
 
-    // Step 3: Trigger 1 KB Micro-Download with Range header
+    // Step 4: 1 KB Micro-Download with Range header on the actual CDN link
     const downloadHeaders = {
-      ...headers,
-      'Range': 'bytes=0-1024'
+      'User-Agent': USER_AGENT,
+      'Accept': '*/*',
+      'Accept-Language': 'en-US,en;q=0.9',
+      'Referer': 'https://gofile.io/',
+      'Origin': 'https://gofile.io',
+      'Range': 'bytes=0-1024',
+      'Cookie': wt ? `accountToken=${wt}` : ''
     };
 
     const response = await axios.get(directLink, {
       headers: downloadHeaders,
-      timeout: 8000,
+      timeout: 10000,
       responseType: 'stream',
-      validateStatus: status => status < 500
+      validateStatus: s => s < 500
     });
 
     logger.debug(`[TouchManager Debug] ✉️  HTTP Response:   ${response.status} ${response.statusText || ''}`);
@@ -118,38 +199,26 @@ async function touchFileRecord(file) {
     logger.debug(`[TouchManager Debug] 🗂️  Content-Type:   ${response.headers?.['content-type'] || 'N/A'}`);
     logger.debug(`[TouchManager Debug] ─────────────────────────────────────────`);
 
+    // Abort stream immediately after receipt
+    if (response.data && typeof response.data.destroy === 'function') {
+      response.data.destroy();
+    }
+
     const isOk = response.status === 200 || response.status === 206;
     const isNotFound = response.status === 404;
 
     if (isOk) {
-      // Abort/destroy the download stream immediately after receiving 1KB
-      if (response.data && typeof response.data.destroy === 'function') {
-        response.data.destroy();
-      }
-
       const updated = db.updateFile(file.id, {
         last_touched: new Date().toISOString(),
         status: 'LIVE'
       });
       console.log(`[TouchManager] ✅ Touch & 1KB Micro-Download SUCCESS (${response.status}) for ${file.filename}. Retention timer reset.`);
       return { success: true, status: 'LIVE', file: updated };
-
     } else if (isNotFound) {
-      if (response.data && typeof response.data.destroy === 'function') {
-        response.data.destroy();
-      }
-
-      const updated = db.updateFile(file.id, {
-        status: 'DEAD'
-      });
-      console.warn(`[TouchManager] ❌ Touch FAILED (404 Not Found) for ${file.filename}. Marked status as DEAD.`);
+      const updated = db.updateFile(file.id, { status: 'DEAD' });
+      console.warn(`[TouchManager] ❌ Touch FAILED (404) for ${file.filename}. Marked DEAD.`);
       return { success: false, status: 'DEAD', file: updated };
-
     } else {
-      if (response.data && typeof response.data.destroy === 'function') {
-        response.data.destroy();
-      }
-
       console.warn(`[TouchManager] Received HTTP ${response.status} for ${file.filename}. Leaving status untouched.`);
       return { success: false, status: file.status, file };
     }
@@ -183,7 +252,7 @@ async function touchAllFiles() {
     await sleep(delay);
   }
 
-  console.log(`[TouchManager] Batch touch process completed. Touched: ${touchedCount} | Marked Dead: ${deadCount} | Total: ${files.length}`);
+  console.log(`[TouchManager] Batch touch complete. Touched: ${touchedCount} | Dead: ${deadCount} | Total: ${files.length}`);
   return { touchedCount, deadCount, total: files.length };
 }
 
