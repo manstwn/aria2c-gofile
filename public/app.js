@@ -498,7 +498,16 @@ function renderLedger() {
         <td class="filename-cell">
           <div class="file-title-row">
             <span class="cat-icon">${catIcon}</span>
-            <span class="file-name-text">${escapeHtml(displayName)}</span>
+            <span
+              class="file-name-text editable-name"
+              contenteditable="true"
+              spellcheck="false"
+              title="Click to edit display name"
+              data-file-id="${file.id}"
+              data-original-value="${escapeHtml(displayName)}"
+              onblur="saveCustomName(this)"
+              onkeydown="handleNameKeydown(event, this)"
+            >${escapeHtml(displayName)}</span>
           </div>
           ${originalRow}
         </td>
@@ -730,6 +739,64 @@ function escapeHtml(str) {
     const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
     return map[match];
   });
+}
+
+/* ==========================================================================
+   INLINE FILENAME EDIT HANDLERS
+   ========================================================================== */
+
+function handleNameKeydown(event, el) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    el.blur(); // Trigger save via onblur
+  }
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    el.textContent = el.dataset.originalValue;
+    el.blur();
+  }
+}
+
+async function saveCustomName(el) {
+  const fileId = el.dataset.fileId;
+  const originalValue = el.dataset.originalValue;
+  const newName = el.textContent.trim();
+
+  if (!newName) {
+    el.textContent = originalValue; // Restore if blank
+    return;
+  }
+
+  if (newName === originalValue) return; // Nothing changed
+
+  el.setAttribute('contenteditable', 'false');
+  el.classList.add('saving');
+
+  try {
+    const res = await fetch(`/api/files/${fileId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ custom_name: newName })
+    });
+    const data = await res.json();
+
+    if (res.ok && data.success) {
+      el.dataset.originalValue = newName;
+      // Update in-memory record
+      const idx = ledgerFiles.findIndex(f => f.id === fileId);
+      if (idx !== -1) ledgerFiles[idx].custom_name = newName;
+      showToast(`Name updated to "${newName}"`, 'success');
+    } else {
+      el.textContent = originalValue;
+      showToast(data.error || 'Failed to save name', 'error');
+    }
+  } catch (err) {
+    el.textContent = originalValue;
+    showToast('Network error saving name', 'error');
+  }
+
+  el.setAttribute('contenteditable', 'true');
+  el.classList.remove('saving');
 }
 
 /* ==========================================================================

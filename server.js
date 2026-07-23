@@ -153,6 +153,21 @@ app.get('/api/files', auth.requireAuth, (req, res) => {
   }
 });
 
+app.patch('/api/files/:id', auth.requireAuth, (req, res) => {
+  try {
+    const { id } = req.params;
+    const { custom_name } = req.body;
+    if (custom_name === undefined) {
+      return res.status(400).json({ error: 'custom_name is required' });
+    }
+    const updated = db.updateFile(id, { custom_name: custom_name.trim() });
+    if (!updated) return res.status(404).json({ error: 'File not found' });
+    res.json({ success: true, file: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post('/api/files/:id/touch', auth.requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
